@@ -1,35 +1,29 @@
 FROM lsiobase/alpine
 MAINTAINER sparklyballs
 
-# add local files
-COPY docker-java-home /usr/local/bin/docker-java-home
-
 # package versions
-ENV JAVA_VERSION 8u111
-ENV JAVA_ALPINE_VERSION 8.111.14-r0
-ENV TOMCAT_MAJOR 8
 ENV TOMCAT_VERSION 8.5.8
 
-# java environment settings
-ENV LANG C.UTF-8
-ENV JAVA_HOME /usr/lib/jvm/java-1.8-openjdk/jre
-ENV PATH $PATH:/usr/lib/jvm/java-1.8-openjdk/jre/bin:/usr/lib/jvm/java-1.8-openjdk/bin
-
-# tomcat environment settings
-ENV CATALINA_HOME /usr/local/tomcat
-ENV PATH $CATALINA_HOME/bin:$PATH
-ENV TOMCAT_NATIVE_LIBDIR $CATALINA_HOME/native-jni-lib
+# environment settings
+ENV CATALINA_HOME="/usr/local/tomcat" \
+JAVA_HOME="/usr/lib/jvm/java-1.8-openjdk/jre" LANG="C.UTF-8"
 ENV LD_LIBRARY_PATH ${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$TOMCAT_NATIVE_LIBDIR
+ENV PATH $CATALINA_HOME/bin:$PATH:/usr/lib/jvm/java-1.8-openjdk/jre/bin:/usr/lib/jvm/java-1.8-openjdk/bin
+ENV TOMCAT_NATIVE_LIBDIR $CATALINA_HOME/native-jni-lib
 
+# setting workdir
 RUN mkdir -p "$CATALINA_HOME"
 WORKDIR $CATALINA_HOME
+
+# add local files
+COPY docker-java-home /usr/local/bin/docker-java-home
 
 # install java
 RUN \
  chmod +x \
 	/usr/local/bin/docker-java-home && \
  apk add --no-cache \
-	openjdk8-jre="$JAVA_ALPINE_VERSION" && \
+	openjdk8-jre && \
  [ "$JAVA_HOME" = "$(docker-java-home)" ] && \
 
 # install build packages
@@ -39,11 +33,12 @@ RUN \
 	gcc \
 	libc-dev \
 	make \
-	"openjdk${JAVA_VERSION%%[-~bu]*}"="$JAVA_ALPINE_VERSION" \
+	openjdk8 \
 	openssl-dev \
 	tar && \
 
 # install tomcat
+ TOMCAT_MAJOR=${TOMCAT_VERSION::1} && \
  curl -o \
  "$CATALINA_HOME/tomcat.tar.gz" -L \
 	"https://www.apache.org/dyn/closer.cgi?action=download&filename=tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz" && \
@@ -65,16 +60,13 @@ RUN \
 	--with-apr="$(which apr-1-config)" \
 	--with-java-home="$(docker-java-home)" \
 	--with-ssl=yes && \
- make -j$(getconf _NPROCESSORS_ONLN) && \
+ make && \
  make install && \
- runDeps="$( \
+ TOMCAT_DEPS="$( \
 	scanelf --needed --nobanner --recursive "$TOMCAT_NATIVE_LIBDIR" \
-	| awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' \
-	| sort -u \
-	| xargs -r apk info --installed \
-	| sort -u \
-	)" && \
- apk add $runDeps && \
+	| awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' | sort -u \
+	| xargs -r apk info --installed | sort -u )" && \
+ apk add $TOMCAT_DEPS && \
 
 # cleanup
  apk del --purge \
@@ -83,4 +75,3 @@ RUN \
 	/tmp/*
 
 EXPOSE 8080
-CMD ["catalina.sh", "run"]
