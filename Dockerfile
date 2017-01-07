@@ -2,7 +2,7 @@ FROM lsiobase/alpine
 MAINTAINER sparklyballs
 
 # package versions
-ENV TOMCAT_VERSION 8.5.8
+ENV TOMCAT_VERSION 8.5.9
 
 # environment settings
 ENV CATALINA_HOME="/usr/local/tomcat" \
